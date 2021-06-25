@@ -2,11 +2,11 @@
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
-use std::thread::Thread;
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
@@ -21,7 +21,7 @@ struct RequestData {
 
 #[derive(Debug)]
 pub struct Shard {
-    work_sender: Sender<RequestData>,
+    request_sender: Sender<RequestData>,
     join_handle: JoinHandle<()>,
 }
 
@@ -31,32 +31,36 @@ pub struct ShardedCollection {
 }
 
 impl ShardedCollection {
-    fn new() -> ShardedCollection {
-        ShardedCollection { shards: Vec::new() }
+    fn new(num_shards: usize) -> ShardedCollection {
+        let mut shards = vec![];
+        for _ in 0..num_shards {
+            let (request_sender, request_receiver) = channel::<RequestData>();
+            let join_handle = spawn_shard_worker(request_receiver);
+            shards.push(Shard {
+                request_sender,
+                join_handle,
+            });
+        }
+
+        ShardedCollection { shards }
     }
 }
 
 #[derive(Debug)]
 pub struct Ruko {
-    num_cores: usize,
+    num_shards: usize,
     collections: HashMap<String, ShardedCollection>,
 }
 
 impl Ruko {
-    fn new() -> Ruko {
+    pub fn new() -> Ruko {
         Ruko {
-            num_cores: num_cpus::get(),
+            num_shards: num_cpus::get(),
             collections: HashMap::new(),
         }
     }
 }
 
-pub struct Worker {
-    id: usize,
-}
-
-// Placeholders
-type JNode = String;
 enum DbCommand {
     CreateCollection {
         name: String,
@@ -72,24 +76,19 @@ enum DbCommand {
 }
 
 enum DbCommandResult {
-    Success { result: Option<JNode> },
+    Success { result: Option<Value> },
     Error { message: String },
 }
 
 enum DataCommand {
-    Set { key: Vec<String>, value: JNode },
+    Set { key: Vec<String>, value: Value },
     Get { key: Vec<String> },
     ShutdownShardedCollection,
 }
 
-pub fn mainThread() {
-    let db: Ruko;
-}
-
-fn collection_shard_worker(work_receiver: Receiver<RequestData>) {
-    // let data: HashMap<String, Value>;
-    loop {
-        match work_receiver.recv() {
+fn spawn_shard_worker(recv: Receiver<RequestData>) -> JoinHandle<()> {
+    thread::spawn(move || loop {
+        match recv.recv() {
             Ok(request) => match request.command {
                 DataCommand::Get { key } => {
                     println!("Get {} {:?}", request.id, key);
@@ -97,43 +96,35 @@ fn collection_shard_worker(work_receiver: Receiver<RequestData>) {
                 DataCommand::Set { key, value } => {
                     println!("Set {} {:?} {}", request.id, key, value);
                 }
-                ShutdownShardedCollection => break,
+                DataCommand::ShutdownShardedCollection => break,
             },
             Err(err) => {
-                println!("Err {}", err);
+                println!("Worker {:?} receive error: {}", thread::current().id(), err);
                 break;
             }
         }
-    }
+    })
 }
 
 impl Ruko {
-    fn runDbCommand(&mut self, db_command: DbCommand) -> DbCommandResult {
-        match db_command {
+    fn run_command(&mut self, cmd: DbCommand) -> DbCommandResult {
+        match cmd {
             DbCommand::CreateCollection { name } => {
-                let mut sharded_collection = ShardedCollection::new();
-                for _ in 0..self.num_cores {
-                    let (work_sender, work_receiver) = channel::<RequestData>();
-                    let join_handle = thread::spawn(|| collection_shard_worker(work_receiver));
-                    sharded_collection.shards.push(Shard {
-                        work_sender,
-                        join_handle,
-                    });
-                }
+                let sharded_collection = ShardedCollection::new(self.num_shards);
                 self.collections.insert(name, sharded_collection);
                 DbCommandResult::Success { result: None }
             }
             DbCommand::DestroyCollection { name } => match self.collections.remove(&name) {
                 Some(collection) => {
-                    for shard in collection.shards {
+                    for (id, shard) in collection.shards.into_iter().enumerate() {
                         shard
-                            .work_sender
+                            .request_sender
                             .send(RequestData {
-                                id: String::new(),
+                                id: format!("{}", id),
                                 command: DataCommand::ShutdownShardedCollection,
                             })
-                            .unwrap();
-                        shard.join_handle.join();
+                            .expect("send shutdown");
+                        shard.join_handle.join().expect("thread shutdown: join");
                     }
                     DbCommandResult::Success { result: None }
                 }
@@ -144,16 +135,16 @@ impl Ruko {
             DbCommand::ModifyCollection { name, id, command } => {
                 match self.collections.get(&name) {
                     Some(sharded_collection) => {
-                        let hash_bucket_size = std::u64::MAX / (self.num_cores as u64);
-                        let thread_idx = (calculate_hash(&id) / hash_bucket_size) as usize;
+                        let hash_bucket_size: u64 = std::u64::MAX
+                            / TryInto::<u64>::try_into(self.num_shards).expect("convert");
+                        let thread_idx: usize = (calculate_hash(&id) / hash_bucket_size)
+                            .try_into()
+                            .expect("convert");
                         let shard = &sharded_collection.shards[thread_idx];
                         shard
-                            .work_sender
-                            .send(RequestData {
-                                id: id,
-                                command: command,
-                            })
-                            .unwrap();
+                            .request_sender
+                            .send(RequestData { id, command })
+                            .expect("send modify command");
                         DbCommandResult::Success { result: None }
                     }
                     None => DbCommandResult::Error {
@@ -165,9 +156,36 @@ impl Ruko {
     }
 
     fn shutdown(&mut self) {
-        for key in self.collections.keys().collect::<Vec<&String>>() {
-            let k2 = (*key).clone();
-            (&mut self).runDbCommand(DbCommand::DestroyCollection { name: k2 });
+        // clone our keys
+        let keys: Vec<String> = self.collections.keys().map(|k| k.clone()).collect();
+        // go over all keys, calling DestroyCollection
+        for key in keys {
+            self.run_command(DbCommand::DestroyCollection { name: key });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn easy() {
+        let mut db = Ruko::new();
+        let cmd = DbCommand::CreateCollection {
+            name: String::from("test_collection"),
+        };
+        db.run_command(cmd);
+        let cmd = DbCommand::ModifyCollection {
+            id: String::from("test_collection"),
+            name: String::from("test_collection"),
+            command: DataCommand::Set {
+                key: vec![String::from("key1")],
+                value: json!({"zach": 9000}),
+            },
+        };
+        db.run_command(cmd);
+        db.shutdown();
+        assert_eq!(2 + 2, 4);
     }
 }
