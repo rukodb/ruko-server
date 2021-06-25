@@ -15,6 +15,8 @@ pub(crate) struct RequestData {
     command: DataCommand,
 }
 
+#[allow(dead_code)]
+
 pub(crate) enum DbCommand {
     CreateCollection {
         name: String,
@@ -27,9 +29,12 @@ pub(crate) enum DbCommand {
         id: String,
         command: DataCommand,
     },
+    ListCollections,
 }
 
 pub(crate) type DbCommandResult = Result<Option<Value>, String>;
+
+#[allow(dead_code)]
 
 pub(crate) enum DataCommand {
     Set { key: Vec<String>, value: Value },
@@ -93,6 +98,12 @@ impl Ruko {
                     None => Err("No such collection".to_string()),
                 }
             }
+            DbCommand::ListCollections => Ok(Some(Value::Array(
+                self.collections
+                    .keys()
+                    .map(|x| Value::String(x.clone()))
+                    .collect(),
+            ))),
         }
     }
 }

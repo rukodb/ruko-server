@@ -41,6 +41,12 @@ pub struct Ruko {
     collections: HashMap<String, ShardedCollection>,
 }
 
+impl Default for Ruko {
+    fn default() -> Self {
+        Ruko::new()
+    }
+}
+
 impl Ruko {
     pub fn new() -> Ruko {
         Ruko {
