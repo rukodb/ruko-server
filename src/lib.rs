@@ -57,11 +57,12 @@ impl Ruko {
 
     pub fn shutdown(&mut self) -> Result<(), String> {
         // clone our keys
-        let keys: Vec<String> = self.collections.keys().map(|k| k.clone()).collect();
+        let keys: Vec<String> = self.collections.keys().cloned().collect();
         // go over all keys, calling DestroyCollection
-        Ok(for key in keys {
+        for key in keys {
             self.run_command(DbCommand::DestroyCollection { name: key })?;
-        })
+        }
+        Ok(())
     }
 }
 
