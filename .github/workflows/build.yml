@@ -23,8 +23,10 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ matrix.toolchain }}
-        override: true
         components: rustfmt, clippy
+        profile: minimal
+        override: true
+        
     - name: build
       run: cargo build --verbose
     - name: fmt
@@ -45,6 +47,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ matrix.toolchain }}
+        profile: minimal
         override: true
     - name: test
       run: cargo test --verbose
