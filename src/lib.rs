@@ -95,9 +95,9 @@ mod tests {
             name: String::from("test_collection"),
         };
         db.run_command(cmd)?;
-        let cmd = DbCommand::ModifyCollection {
+        let cmd = DbCommand::ExecuteOnEntry {
             id: String::from("test_collection"),
-            name: String::from("test_collection"),
+            collection_name: String::from("test_collection"),
             command: DataCommand::Set {
                 key: vec![String::from("key1")],
                 value: json!({"zach": 9000}),
