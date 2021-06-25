@@ -1,8 +1,8 @@
-use serde_json::Value;
-use std::convert::TryInto;
 use crate::{Ruko, ShardedCollection};
-use std::hash::{Hash, Hasher};
+use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
+use std::convert::TryInto;
+use std::hash::{Hash, Hasher};
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
