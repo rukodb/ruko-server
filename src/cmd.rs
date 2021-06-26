@@ -14,6 +14,7 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 
 type DataCommandReturnVal = Option<Value>;
 
+#[derive(Debug)]
 pub(crate) struct DataCommandResult {
     value: Arc<(Mutex<Option<DataCommandReturnVal>>, Condvar)>,
 }
@@ -49,6 +50,7 @@ impl DataCommandResult {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct RequestData {
     id: String,
     command: DataCommand,
@@ -56,7 +58,7 @@ pub(crate) struct RequestData {
 }
 
 #[allow(dead_code)]
-
+#[derive(Debug)]
 pub(crate) enum DbCommand {
     CreateCollection {
         name: String,
@@ -75,7 +77,7 @@ pub(crate) enum DbCommand {
 pub(crate) type DbCommandResult = Result<Option<Value>, String>;
 
 #[allow(dead_code)]
-
+#[derive(Debug)]
 pub(crate) enum DataCommand {
     Set { key: Vec<String>, value: Value },
     Get { key: Vec<String> },

@@ -1,4 +1,14 @@
 //! Ruko in-memory sharded kv database.
+
+#![warn(
+    unreachable_pub,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    rust_2018_idioms,
+    missing_debug_implementations
+)]
+
 use log::{error, info};
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
