@@ -9,6 +9,8 @@ mod cmd;
 use cmd::process_request;
 use cmd::{DbCommand, RequestData};
 
+pub mod server;
+
 #[derive(Debug)]
 pub struct Shard {
     request_sender: Sender<RequestData>,

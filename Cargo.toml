@@ -1,13 +1,12 @@
 [package]
 name = "ruko-server"
 version = "0.1.0"
-authors = ["Matthew D. Scholefield <matthew331199@gmail.com>"]
+authors = ["Matthew D. Scholefield <matthew331199@gmail.com>", "Zach Schuermann <zachary.zvs@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+tokio = { version = "1.7.0", features = ["full"] }
 serde_json = "1.0"
 num_cpus = "1.13"
 log = "0.4.14"
-
-[dev-dependencies]
 env_logger = "0.8.4"
