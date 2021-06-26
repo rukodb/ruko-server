@@ -23,7 +23,9 @@ impl DataCommandResult {
         let result = DataCommandResult {
             value: Arc::new((Mutex::new(None), Condvar::new())),
         };
-        let result2 = DataCommandResult { value: Arc::clone(&result.value) };
+        let result2 = DataCommandResult {
+            value: Arc::clone(&result.value),
+        };
         (result, result2)
     }
 
@@ -84,7 +86,9 @@ pub(crate) fn process_request(mut request: RequestData) -> bool {
     match request.command {
         DataCommand::Get { key } => {
             println!("Get {} {:?}", request.id, key);
-            request.result.set(Some(Value::String("this is the result".to_owned())));
+            request
+                .result
+                .set(Some(Value::String("this is the result".to_owned())));
         }
         DataCommand::Set { key, value } => {
             println!("Set {} {:?} {}", request.id, key, value);
@@ -136,7 +140,11 @@ impl Ruko {
                     let shard = &sharded_collection.shards[thread_idx];
                     shard
                         .request_sender
-                        .send(RequestData { id, command, result: result_for_shard })
+                        .send(RequestData {
+                            id,
+                            command,
+                            result: result_for_shard,
+                        })
                         .expect("send modify command");
                     Ok(result.get())
                 }
