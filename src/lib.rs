@@ -1,4 +1,5 @@
 //! Ruko in-memory sharded kv database.
+use log::{error, info};
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
@@ -56,6 +57,7 @@ impl Ruko {
     }
 
     pub fn shutdown(&mut self) -> Result<(), String> {
+        info!("Shutting down.");
         // clone our keys
         let keys: Vec<String> = self.collections.keys().cloned().collect();
         // go over all keys, calling DestroyCollection
@@ -75,7 +77,7 @@ fn spawn_shard_worker(recv: Receiver<RequestData>) -> JoinHandle<()> {
                 }
             }
             Err(err) => {
-                println!("Worker {:?} receive error: {}", thread::current().id(), err);
+                error!("Worker {:?} receive error: {}", thread::current().id(), err);
                 break;
             }
         }
@@ -86,10 +88,12 @@ fn spawn_shard_worker(recv: Receiver<RequestData>) -> JoinHandle<()> {
 mod tests {
     use super::*;
     use crate::cmd::DataCommand;
-
     use serde_json::json;
+
     #[test]
     fn easy() -> Result<(), String> {
+        env_logger::init();
+
         let mut db = Ruko::new();
         let cmd = DbCommand::CreateCollection {
             name: String::from("test_collection"),
